@@ -1174,16 +1174,59 @@ body{
   .sat-1,.sat-4{top:8%;}
   .sat-3,.sat-6{bottom:12%;}
 }
+
+
+/* =====================================================
+   MOBILE PERFORMANCE OPTIMIZATION
+   Tampilan dan alur tetap sama, rendering dibuat lebih ringan.
+===================================================== */
+@media (max-width:600px){
+  /* Kurangi compositing blur yang berat di Safari/iPhone */
+  #stage-question,
+  #stage-wa,
+  .q-box,
+  .wa-box,
+  #music-bar{
+    -webkit-backdrop-filter:none;
+    backdrop-filter:none;
+  }
+
+  /* Glow tetap ada tetapi lebih ringan */
+  .cha-glow-ring{filter:blur(10px);opacity:.58;}
+  .cha-glow-ring-2{filter:blur(12px);opacity:.32;}
+  .cha-name-tag h2{filter:none;text-shadow:0 0 18px rgba(255,79,163,.45);}
+  .intro-name,.r-title{filter:none;text-shadow:0 0 18px rgba(255,79,163,.45);}
+
+  /* Hindari animasi filter dan box-shadow besar setiap frame */
+  .cha-frame{animation:borderShift 6s ease infinite,jedagJedugMain 1.35s cubic-bezier(.15,.8,.2,1) infinite;box-shadow:0 0 35px rgba(255,79,163,.42),0 0 60px rgba(168,77,255,.22);}
+  .cha-frame-inner img{filter:none;}
+  .sat-frame-inner{animation:none;}
+  .sat-frame{box-shadow:0 0 0 2px rgba(255,79,163,.4),0 5px 16px rgba(0,0,0,.5),0 0 12px rgba(168,77,255,.22);}
+  .q-btn-yes,.wa-btn,.intro-btn{animation:none;}
+  .r-moon{animation:none;}
+  .r-shoot{box-shadow:0 0 4px 1px rgba(255,180,240,.8);}
+
+  /* Beri browser petunjuk bahwa animasi utama berbasis transform */
+  .cha-main-wrap,.orbit,.sat-frame,.q-emoji,.wa-emoji,.i-heart,.r-heart,.q-heart,.petal,.r-petal,.confetti-piece{will-change:transform;}
+
+  /* Foto satelit tetap 6 dan tampil sama, tetapi filter inline diabaikan di mobile */
+  .sat-frame-inner img{filter:none !important;}
+}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;}
+}
+
 </style>
 </head>
 
 <body>
 
-<audio id="bgMusicStory" loop autoplay preload="auto">
+<audio id="bgMusicStory" loop autoplay preload="metadata">
   <source src="Lagu/Story-Never-Ends.mp3" type="audio/mpeg">
 </audio>
 
-<audio id="bgMusicFlower" loop preload="auto">
+<audio id="bgMusicFlower" loop preload="metadata">
   <source src="Lagu/Cha_Song.mp3" type="audio/mpeg">
 </audio>
 
@@ -1472,12 +1515,27 @@ window.addEventListener('DOMContentLoaded', function(){
   }
 });
 
-/* ─── CANVAS ─── */
-canvas.width  = window.innerWidth;
-canvas.height = window.innerHeight;
+/* ─── CANVAS (OPTIMIZED FOR MOBILE) ─── */
+var isMobile = window.matchMedia('(max-width: 600px)').matches;
+var isLowPower = isMobile || (navigator.deviceMemory && navigator.deviceMemory <= 4);
+var renderScale = isLowPower ? 0.72 : 1;
+var particleCount = isLowPower ? 55 : 160;
+var particleFrameGap = isLowPower ? 33 : 0; // ~30 FPS di HP, penuh di desktop
+var lastParticleFrame = 0;
+
+function resizeCanvas(){
+  var w = Math.max(1, window.innerWidth);
+  var h = Math.max(1, window.innerHeight);
+  canvas.width = Math.floor(w * renderScale);
+  canvas.height = Math.floor(h * renderScale);
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.setTransform(renderScale,0,0,renderScale,0,0);
+}
+resizeCanvas();
 window.addEventListener('resize', function(){
-  canvas.width  = window.innerWidth;
-  canvas.height = window.innerHeight;
+  isMobile = window.matchMedia('(max-width: 600px)').matches;
+  resizeCanvas();
 });
 
 var particles = [];
@@ -1485,16 +1543,16 @@ var particleColors = ['#ff4fa3','#a84dff','#ffb6df','#ffffff','#ffd6f0','#d4a8ff
 
 function Particle(){ this.reset(); }
 Particle.prototype.reset = function(){
-  this.x            = Math.random() * canvas.width;
-  this.y            = Math.random() * canvas.height;
-  this.r            = .5 + Math.random() * 2.5;
-  this.vx           = (Math.random()-.5)*.4;
-  this.vy           = -.3 - Math.random()*.5;
-  this.life         = 0;
-  this.maxLife      = 120 + Math.random()*180;
-  this.color        = particleColors[Math.floor(Math.random() * particleColors.length)];
+  this.x = Math.random() * window.innerWidth;
+  this.y = Math.random() * window.innerHeight;
+  this.r = isLowPower ? (.7 + Math.random()*1.5) : (.5 + Math.random()*2.5);
+  this.vx = (Math.random()-.5)*.4;
+  this.vy = -.3 - Math.random()*.5;
+  this.life = 0;
+  this.maxLife = 120 + Math.random()*180;
+  this.color = particleColors[Math.floor(Math.random() * particleColors.length)];
   this.twinkleSpeed = .02 + Math.random()*.04;
-  this.twinkleOff   = Math.random() * Math.PI * 2;
+  this.twinkleOff = Math.random() * Math.PI * 2;
 };
 Particle.prototype.update = function(){
   this.life++;
@@ -1503,31 +1561,50 @@ Particle.prototype.update = function(){
   if(this.life > this.maxLife || this.y < -10) this.reset();
 };
 Particle.prototype.draw = function(){
-  var pr      = this.life / this.maxLife;
-  var alpha   = pr < .15 ? pr/.15 : pr > .8 ? (1-pr)/.2 : 1;
+  var pr = this.life / this.maxLife;
+  var alpha = pr < .15 ? pr/.15 : pr > .8 ? (1-pr)/.2 : 1;
   var twinkle = .6 + .4 * Math.sin(this.life * this.twinkleSpeed + this.twinkleOff);
-  ctx.save();
-  ctx.globalAlpha  = alpha * twinkle * .85;
-  ctx.fillStyle    = this.color;
-  ctx.shadowColor  = this.color;
-  ctx.shadowBlur   = 6;
+  ctx.globalAlpha = alpha * twinkle * .85;
+  ctx.fillStyle = this.color;
+  if(!isLowPower){
+    ctx.shadowColor = this.color;
+    ctx.shadowBlur = 6;
+  }else{
+    ctx.shadowBlur = 0;
+  }
   ctx.beginPath();
   ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
   ctx.fill();
-  ctx.restore();
 };
-for(var i=0; i<160; i++){
+for(var i=0; i<particleCount; i++){
   var _p = new Particle();
   _p.life = Math.random() * _p.maxLife;
   particles.push(_p);
 }
 var animRunning = false;
-function animateParticles(){
+function animateParticles(now){
   if(!animRunning) return;
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  particles.forEach(function(p){ p.update(); p.draw(); });
+  if(!lastParticleFrame || now - lastParticleFrame >= particleFrameGap){
+    lastParticleFrame = now;
+    ctx.clearRect(0,0,window.innerWidth,window.innerHeight);
+    ctx.save();
+    particles.forEach(function(p){ p.update(); p.draw(); });
+    ctx.restore();
+  }
   requestAnimationFrame(animateParticles);
 }
+
+document.addEventListener('visibilitychange', function(){
+  if(document.hidden){
+    animRunning = false;
+  }else if(gardenStarted && canvas.classList.contains('show')){
+    if(!animRunning){
+      animRunning = true;
+      lastParticleFrame = 0;
+      requestAnimationFrame(animateParticles);
+    }
+  }
+});
 
 /* ─── FLOATING HEARTS ─── */
 function generateHearts(id, count){
@@ -1554,7 +1631,7 @@ generateHearts('wa-hearts',       20);
 /* sparkles intro */
 (function(){
   var ov = document.getElementById('stage-intro');
-  for(var i=0;i<35;i++){
+  for(var i=0;i<(isLowPower ? 14 : 35);i++){
     var s = document.createElement('div');
     s.className = 'i-sparkle';
     s.style.left   = Math.random()*100 + 'vw';
@@ -1569,7 +1646,7 @@ generateHearts('wa-hearts',       20);
 /* shooting stars & petals di romantic */
 (function(){
   var st = document.getElementById('stage-romantic');
-  for(var i=0;i<8;i++){
+  for(var i=0;i<(isLowPower ? 4 : 8);i++){
     var s=document.createElement('div'); s.className='r-shoot';
     s.style.left=            (10+Math.random()*80)+'vw';
     s.style.top=             (5+Math.random()*40)+'vh';
@@ -1578,7 +1655,7 @@ generateHearts('wa-hearts',       20);
     st.appendChild(s);
   }
   var pt=['🌸','🌷','🌺','✿','❀','💮'];
-  for(var j=0;j<18;j++){
+  for(var j=0;j<(isLowPower ? 8 : 18);j++){
     var p=document.createElement('div'); p.className='r-petal';
     p.textContent=pt[Math.floor(Math.random()*pt.length)];
     p.style.left=             Math.random()*100+'vw';
@@ -1592,7 +1669,7 @@ generateHearts('wa-hearts',       20);
 function spawnGardenPetals(){
   var c  = document.getElementById('gardenPetals');
   var pt = ['🌸','🌷','✿','❀','🌺','💮','🏵️'];
-  for(var i=0;i<22;i++){
+  for(var i=0;i<(isLowPower ? 10 : 22);i++){
     var p=document.createElement('div'); p.className='petal';
     p.textContent=pt[Math.floor(Math.random()*pt.length)];
     p.style.left=             Math.random()*100+'vw';
@@ -1663,7 +1740,7 @@ function showGardenAndQuestion(){
   garden.classList.add('visible');
   canvas.classList.add('show');
   animRunning=true;
-  animateParticles();
+  requestAnimationFrame(animateParticles);
   setTimeout(function(){
     document.querySelectorAll('.sat-frame').forEach(function(f,i){
       setTimeout(function(){ f.classList.add('show'); },i*200);
@@ -1801,10 +1878,10 @@ qYes.addEventListener('click', function(){
 
     // FASE 1: Smooth Exit untuk elemen di dalam qBox (Fade Out, Float Up & Blur)
     animElements.forEach(function(el) {
-      el.style.transition = 'opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1), transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), filter 0.35s ease';
+      el.style.transition = isLowPower ? 'opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1), transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)' : 'opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1), transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), filter 0.35s ease';
       el.style.opacity = '0';
       el.style.transform = 'translateY(-18px) scale(0.92)';
-      el.style.filter = 'blur(6px)';
+      el.style.filter = isLowPower ? 'none' : 'blur(6px)';
     });
 
     setTimeout(function(){
@@ -1822,7 +1899,7 @@ qYes.addEventListener('click', function(){
         el.style.transition = 'none';
         el.style.opacity = '0';
         el.style.transform = 'translateY(22px) scale(0.88)';
-        el.style.filter = 'blur(6px)';
+        el.style.filter = isLowPower ? 'none' : 'blur(6px)';
       });
 
       // Force layout reflow
@@ -1831,7 +1908,7 @@ qYes.addEventListener('click', function(){
       // FASE 2: Staggered Spring Entry (Elemen muncul berurutan dengan animasi bounce & fade in super smooth)
       animElements.forEach(function(el, idx) {
         setTimeout(function() {
-          el.style.transition = 'opacity 0.45s ease, transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.45s ease';
+          el.style.transition = isLowPower ? 'opacity 0.45s ease, transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'opacity 0.45s ease, transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.45s ease';
           el.style.opacity = '1';
           el.style.transform = 'translateY(0) scale(1)';
           el.style.filter = 'blur(0px)';
@@ -1874,7 +1951,7 @@ waSkip.addEventListener('click', function(){
 /* ─── CONFETTI ─── */
 function launchConfetti(){
   var colors=['#ff4fa3','#a84dff','#ffb6df','#ffd54f','#ff6b6b','#74c0fc','#fff'];
-  for(var i=0;i<100;i++){
+  for(var i=0;i<(isLowPower ? 40 : 100);i++){
     (function(i){
       setTimeout(function(){
         var c=document.createElement('div');
@@ -1888,7 +1965,7 @@ function launchConfetti(){
         c.style.animationDelay=   '0s';
         document.body.appendChild(c);
         setTimeout(function(){ c.remove(); },6000);
-      },i*30);
+      },i*(isLowPower ? 45 : 30));
     })(i);
   }
 }
