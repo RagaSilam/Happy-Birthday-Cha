@@ -455,7 +455,59 @@
     justify-content:center;
     overflow:hidden;
     background:#02020a;
+    visibility:hidden;
     transition:opacity 1.6s ease,transform 1.6s ease;
+  }
+
+  #stage-intro.unlocked{visibility:visible;}
+
+  #stage-cover{
+    position:fixed;
+    inset:0;
+    z-index:100000;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+    background:#02020a;
+    transition:opacity 1s ease,transform 1s ease;
+  }
+
+  #stage-cover.hide{
+    opacity:0;
+    pointer-events:none;
+    transform:scale(1.06);
+  }
+
+  .cover-content{
+    position:relative;
+    z-index:2;
+    text-align:center;
+    padding:2rem 1.5rem;
+  }
+
+  .cover-btn{
+    padding:1rem 3rem;
+    border:1px solid rgba(255,182,223,.65);
+    border-radius:50px;
+    background:linear-gradient(135deg,#ff4fa3,#a84dff);
+    color:#fff;
+    font-family:'Orbitron','Segoe UI',sans-serif;
+    font-size:clamp(.95rem,2.5vw,1.15rem);
+    font-weight:700;
+    letter-spacing:.12em;
+    cursor:pointer;
+    box-shadow:0 0 18px rgba(255,79,163,.55),0 0 36px rgba(168,77,255,.3);
+    animation:coverButtonPulse 2s ease-in-out infinite;
+    transition:transform .2s ease;
+  }
+
+  .cover-btn:hover{transform:scale(1.08);}
+  .cover-btn:active{transform:scale(.95);}
+
+  @keyframes coverButtonPulse{
+    0%,100%{box-shadow:0 0 18px rgba(255,79,163,.55),0 0 36px rgba(168,77,255,.3);}
+    50%{box-shadow:0 0 28px rgba(255,79,163,.9),0 0 52px rgba(168,77,255,.55);}
   }
 
   #stage-intro.hide{
@@ -1327,7 +1379,7 @@
 
   <body>
 
-  <audio id="bgMusicStory" loop autoplay preload="metadata">
+  <audio id="bgMusicStory" loop preload="metadata">
     <source src="Lagu/Story-Never-Ends.mp3" type="audio/mpeg">
   </audio>
 
@@ -1416,6 +1468,12 @@
     </div>
 
     <div id="gardenPetals"></div>
+  </div>
+
+  <div id="stage-cover">
+    <div class="cover-content">
+      <button class="cover-btn" id="coverBtn" type="button">BUKA</button>
+    </div>
   </div>
 
   <div id="stage-intro">
@@ -1547,6 +1605,8 @@
 
   /* ─── ELEMENTS ─── */
   var stageIntro    = document.getElementById('stage-intro');
+  var stageCover    = document.getElementById('stage-cover');
+  var coverBtn      = document.getElementById('coverBtn');
   var stageRomantic = document.getElementById('stage-romantic');
   var stageQuestion = document.getElementById('stage-question');
   var stageWa       = document.getElementById('stage-wa');
@@ -1579,19 +1639,11 @@
   var romanticEnded      = false;
   var romanticDuration   = 20000;
 
-  /* ─── AUTOPLAY ─── */
-  window.addEventListener('DOMContentLoaded', function(){
+  /* ─── AUDIO START ─── */
+  function startStoryAudio(){
     musicStory.volume = 0.75;
-    var p = musicStory.play();
-    if(p !== undefined){
-      p.catch(function(){
-        document.addEventListener('click', function fb(){
-          musicStory.play();
-          document.removeEventListener('click', fb);
-        }, {once:true});
-      });
-    }
-  });
+    musicStory.play().catch(function(e){ console.warn('Story audio blocked:',e); });
+  }
 
   /* ─── CANVAS (OPTIMIZED FOR MOBILE) ─── */
   var isMobile = window.matchMedia('(max-width: 600px)').matches;
@@ -1776,9 +1828,17 @@
   }
 
   /* ─── STAGE FLOW ─── */
+  coverBtn.addEventListener('click', function(){
+    startStoryAudio();
+    stageIntro.classList.add('unlocked');
+    stageCover.classList.add('hide');
+    setTimeout(function(){ stageCover.style.display='none'; },1100);
+  });
+
   enterBtn.addEventListener('click', function(){
     if(gardenStarted) return;
     gardenStarted=true;
+    startStoryAudio();
 
     stageIntro.classList.add('hide');
     setTimeout(function(){ stageIntro.style.display='none'; },1700);
@@ -1809,10 +1869,12 @@
   function endRomanticStage(){
     if(romanticEnded) return;
     romanticEnded=true;
+    musicStory.pause();
+    musicStory.currentTime=0;
+    musicStory.volume=0;
     fadeInAudio(musicFlower,.8);
     musicFlowerPlaying=true;
     musicBar.style.opacity='1';
-    fadeOutAudio(musicStory);
     stageRomantic.style.transition='opacity 1.5s ease';
     stageRomantic.style.opacity='0';
     setTimeout(function(){ stageRomantic.style.display='none'; },1600);
