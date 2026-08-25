@@ -1230,6 +1230,11 @@ body{
   *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;}
 }
 
+
+/* MOBILE SAFE AREA UNTUK TOMBOL LARI */
+@media(max-width:600px){
+  .q-box{min-height:500px;}
+}
 </style>
 </head>
 
@@ -1777,37 +1782,93 @@ var resetNoButtonPosition = function(){};
 function getCorners(btn){
   var bw  = btn.offsetWidth;
   var bh  = btn.offsetHeight;
-  var bxw = qBox.offsetWidth;
-  var bxh = qBox.offsetHeight;
+  var boxRect = qBox.getBoundingClientRect();
+  var bxw = qBox.clientWidth;
+  var bxh = qBox.clientHeight;
 
-  var xL  = PAD;
-  var xR  = bxw - bw - PAD;
-  var yT  = PAD;
-  var yB  = bxh - bh - PAD;
+  var xL = PAD;
+  var xR = Math.max(xL, bxw - bw - PAD);
+  var yT = PAD;
+  var yB = Math.max(yT, bxh - bh - PAD);
 
-  /* Cari posisi Y sejajar emoji */
-  var emojiEl  = qEmoji;
-  var boxRect  = qBox.getBoundingClientRect();
-  var yEmoji   = yT;
-  if(emojiEl){
-    var er = emojiEl.getBoundingClientRect();
-    yEmoji = Math.round((er.top - boxRect.top) + (er.height - bh) / 2);
-    yEmoji = Math.min(Math.max(yT, yEmoji), yB);
+  /* Desktop tetap memakai pola posisi lama yang sudah bagus */
+  if(window.innerWidth > 600){
+    var yEmoji = yT;
+    if(qEmoji){
+      var er = qEmoji.getBoundingClientRect();
+      yEmoji = Math.round((er.top - boxRect.top) + (er.height - bh) / 2);
+      yEmoji = Math.min(Math.max(yT, yEmoji), yB);
+    }
+    return [
+      {name:'TL',  x:xL, y:yT},
+      {name:'TR',  x:xR, y:yT},
+      {name:'EML', x:xL + 18, y:yEmoji + 22},
+      {name:'EMR', x:xR - 18, y:yEmoji + 22},
+      {name:'BL',  x:xL, y:yB},
+      {name:'BR',  x:xR, y:yB}
+    ];
   }
 
-  xR = Math.max(xL, xR);
-  yB = Math.max(yT, yB);
+  /* MOBILE: jangan memilih titik yang menimpa emoji, teks, atau tombol Iya */
+  var blockedEls = [qEmoji, qTitle, qSub, qYes];
+  var safeRects = [];
 
-  return [
-    {name:'TL',  x:xL, y:yT},
-    {name:'TR',  x:xR, y:yT},
-    {name:'EML', x:xL + 18, y:yEmoji + 22},
-    {name:'EMR', x:xR - 18, y:yEmoji + 22},
-    {name:'BL',  x:xL, y:yB},
-    {name:'BR',  x:xR, y:yB}
+  blockedEls.forEach(function(el){
+    if(!el) return;
+    var r = el.getBoundingClientRect();
+    if(r.width <= 0 || r.height <= 0) return;
+    var margin = 10;
+    safeRects.push({
+      left:   r.left   - boxRect.left - margin,
+      top:    r.top    - boxRect.top  - margin,
+      right:  r.right  - boxRect.left + margin,
+      bottom: r.bottom - boxRect.top  + margin
+    });
+  });
+
+  function overlapsBlocked(x,y){
+    var right=x+bw, bottom=y+bh;
+    return safeRects.some(function(r){
+      return x < r.right && right > r.left && y < r.bottom && bottom > r.top;
+    });
+  }
+
+  /* Banyak kandidat menyebar di seluruh q-box. Yang bertabrakan otomatis dibuang. */
+  var raw = [
+    ['TL', xL, yT], ['TR', xR, yT],
+    ['ML', xL, Math.round((yT+yB)*0.5)], ['MR', xR, Math.round((yT+yB)*0.5)],
+    ['BL', xL, yB], ['BR', xR, yB],
+    ['T1', Math.round((xL+xR)*0.33), yT],
+    ['T2', Math.round((xL+xR)*0.66), yT],
+    ['B1', Math.round((xL+xR)*0.33), yB],
+    ['B2', Math.round((xL+xR)*0.66), yB]
+  ];
+
+  var free = raw.map(function(c){
+    return {name:c[0], x:Math.max(xL,Math.min(xR,c[1])), y:Math.max(yT,Math.min(yB,c[2]))};
+  }).filter(function(c){ return !overlapsBlocked(c.x,c.y); });
+
+  /* Kalau layar sangat kecil, cari titik aman dengan grid agar tetap tidak menimpa isi. */
+  if(free.length < 3){
+    var stepX = Math.max(18, Math.floor((xR-xL)/5));
+    var stepY = Math.max(18, Math.floor((yB-yT)/8));
+    var n=0;
+    for(var yy=yT; yy<=yB && n<24; yy+=stepY){
+      for(var xx=xL; xx<=xR && n<24; xx+=stepX){
+        var px=Math.min(xR,xx), py=Math.min(yB,yy);
+        if(!overlapsBlocked(px,py)){
+          free.push({name:'G'+n, x:px, y:py});
+          n++;
+        }
+      }
+    }
+  }
+
+  return free.length ? free : [
+    {name:'BL', x:xL, y:yB},
+    {name:'BR', x:xR, y:yB}
   ];
 }
-
 function makeButtonRun(btn){
   var lastCorner = null;
   var prevCorner = null;
