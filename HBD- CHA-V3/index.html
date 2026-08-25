@@ -1245,6 +1245,8 @@ body{
   .q-box{
     min-height:560px !important;
     box-sizing:border-box;
+    /* Pengaman terakhir: tombol yang sedang bergerak tidak boleh terlihat keluar Q Box */
+    overflow:hidden;
   }
 
   /* Semua isi utama diturunkan tanpa mengubah layout desktop */
@@ -1813,10 +1815,15 @@ function getCorners(btn){
   var bxw = qBox.clientWidth;
   var bxh = qBox.clientHeight;
 
-  var xL = PAD;
-  var xR = Math.max(xL, bxw - bw - PAD);
-  var yT = PAD;
-  var yB = Math.max(yT, bxh - bh - PAD);
+  /* Koordinat absolute + translate3d dihitung dari containing block qBox.
+     clientLeft/clientTop penting agar perhitungan tetap benar setelah viewport
+     berubah (Chrome device mode, rotasi iPhone, resize). */
+  var originX = qBox.clientLeft;
+  var originY = qBox.clientTop;
+  var xL = originX + PAD;
+  var xR = Math.max(xL, originX + bxw - bw - PAD);
+  var yT = originY + PAD;
+  var yB = Math.max(yT, originY + bxh - bh - PAD);
 
   /* Desktop tetap memakai pola lama yang sudah cocok */
   if(window.innerWidth > 600){
@@ -1843,10 +1850,10 @@ function getCorners(btn){
     var r = el.getBoundingClientRect();
     if(r.width < 1 || r.height < 1) return;
     blocked.push({
-      left: Math.max(0, r.left - boxRect.left - safety),
-      top: Math.max(0, r.top - boxRect.top - safety),
-      right: Math.min(bxw, r.right - boxRect.left + safety),
-      bottom: Math.min(bxh, r.bottom - boxRect.top + safety)
+      left: Math.max(originX, r.left - boxRect.left - safety),
+      top: Math.max(originY, r.top - boxRect.top - safety),
+      right: Math.min(originX + bxw, r.right - boxRect.left + safety),
+      bottom: Math.min(originY + bxh, r.bottom - boxRect.top + safety)
     });
   });
 
@@ -1954,6 +1961,29 @@ function makeButtonRun(btn){
 
   btn.addEventListener('keydown', function(e){
     if(e.key === 'Enter' || e.key === ' '){ flee(e); }
+  });
+
+  /* Jika ukuran viewport berubah ketika tombol sedang "lari", posisi lama
+     tidak boleh dipertahankan karena koordinat lama bisa berada di luar qBox. */
+  function keepButtonInsideAfterResize(){
+    if(!activated || !btn.classList.contains('running')) return;
+    var corners = getCorners(btn);
+    if(!corners.length) return;
+
+    var pick = corners[Math.floor(Math.random() * corners.length)];
+    lastCorner = pick.name;
+    prevCorner = null;
+    setRunPosition(pick.x, pick.y);
+  }
+
+  var resizeTimer = null;
+  window.addEventListener('resize', function(){
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(keepButtonInsideAfterResize, 120);
+  });
+  window.addEventListener('orientationchange', function(){
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(keepButtonInsideAfterResize, 250);
   });
 
   resetNoButtonPosition = function(){
