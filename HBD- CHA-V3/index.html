@@ -1016,8 +1016,12 @@ body{
   z-index:200;
   white-space:nowrap;
   pointer-events:all;
-  transition:top .28s cubic-bezier(.22,.68,0,1.25),
-             left .28s cubic-bezier(.22,.68,0,1.25) !important;
+  left:0 !important;
+  top:0 !important;
+  transform:translate3d(var(--run-x,0px),var(--run-y,0px),0);
+  -webkit-transform:translate3d(var(--run-x,0px),var(--run-y,0px),0);
+  will-change:transform;
+  transition:transform .22s cubic-bezier(.22,.68,0,1.15) !important;
 }
 
 
@@ -1175,6 +1179,15 @@ body{
   .sat-3,.sat-6{bottom:12%;}
 }
 
+
+/* Extra smooth interaction khusus tombol lari di mobile */
+@media (max-width:768px){
+  .q-btn-no.running{
+    transition-duration:.18s !important;
+    backface-visibility:hidden;
+    -webkit-backface-visibility:hidden;
+  }
+}
 
 /* =====================================================
    MOBILE PERFORMANCE OPTIMIZATION
@@ -1799,6 +1812,12 @@ function makeButtonRun(btn){
   var lastCorner = null;
   var prevCorner = null;
   var activated  = false;
+  var lastFleeAt = 0;
+
+  function setRunPosition(x,y){
+    btn.style.setProperty('--run-x', Math.round(x) + 'px');
+    btn.style.setProperty('--run-y', Math.round(y) + 'px');
+  }
 
   function activate(){
     if(activated) return;
@@ -1806,22 +1825,25 @@ function makeButtonRun(btn){
 
     var btnRect = btn.getBoundingClientRect();
     var boxRect = qBox.getBoundingClientRect();
-
     var initX = btnRect.left - boxRect.left;
     var initY = btnRect.top  - boxRect.top;
 
     btn.style.width  = btn.offsetWidth  + 'px';
     btn.style.height = btn.offsetHeight + 'px';
     btn.classList.add('running');
-    btn.style.left   = initX + 'px';
-    btn.style.top    = initY + 'px';
-
+    setRunPosition(initX, initY);
     btn.offsetHeight;
   }
 
   function flee(e){
-    e.preventDefault();
-    e.stopPropagation();
+    if(e){
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    var now = performance.now();
+    if(now - lastFleeAt < 90) return;
+    lastFleeAt = now;
 
     activate();
 
@@ -1834,31 +1856,38 @@ function makeButtonRun(btn){
     }
     if(choices.length === 0) choices = corners;
 
-    var pick   = choices[Math.floor(Math.random() * choices.length)];
+    var pick = choices[Math.floor(Math.random() * choices.length)];
     prevCorner = lastCorner;
     lastCorner = pick.name;
-
-    btn.style.left = pick.x + 'px';
-    btn.style.top  = pick.y + 'px';
+    setRunPosition(pick.x, pick.y);
   }
 
-  btn.addEventListener('click',      flee);
-  btn.addEventListener('touchstart', flee, {passive:false});
+  /* Satu event untuk touch + mouse agar iPhone tidak memicu dua kali */
+  if(window.PointerEvent){
+    btn.addEventListener('pointerdown', flee, {passive:false});
+  }else{
+    btn.addEventListener('touchstart', flee, {passive:false});
+    btn.addEventListener('click', flee);
+  }
 
-  /* Fungsi untuk mengembalikan tombol ke posisi semula (inline flex) */
+  btn.addEventListener('keydown', function(e){
+    if(e.key === 'Enter' || e.key === ' '){ flee(e); }
+  });
+
   resetNoButtonPosition = function(){
     activated = false;
     lastCorner = null;
     prevCorner = null;
+    lastFleeAt = 0;
     btn.classList.remove('running');
-    btn.style.left = '';
-    btn.style.top = '';
+    btn.style.removeProperty('--run-x');
+    btn.style.removeProperty('--run-y');
     btn.style.width = '';
     btn.style.height = '';
     btn.style.position = '';
+    btn.style.transform = '';
   };
 }
-
 makeButtonRun(qNo);
 
 /* ─── Q YES — Update konten untuk pertanyaan berikutnya dengan Animasi Transisi Halus (Tanpa mengubah qBox) ─── */
