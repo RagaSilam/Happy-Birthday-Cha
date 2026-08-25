@@ -1235,6 +1235,33 @@ body{
 @media(max-width:600px){
   .q-box{min-height:560px;}
 }
+
+/* =====================================================
+   MOBILE Q-BOX LAYOUT FIX
+   Konten sengaja diturunkan agar area atas menjadi ruang
+   kosong untuk tombol "Enggak sih" saat berpindah.
+===================================================== */
+@media(max-width:600px){
+  .q-box{
+    min-height:560px !important;
+    box-sizing:border-box;
+  }
+
+  /* Semua isi utama diturunkan tanpa mengubah layout desktop */
+  .q-emoji,
+  .q-title,
+  .q-sub,
+  .q-buttons{
+    position:relative;
+    top:42px;
+  }
+
+  /* Ruang antara teks dan tombol tetap nyaman */
+  .q-sub{
+    margin-bottom:2.25rem;
+  }
+}
+
 </style>
 </head>
 
