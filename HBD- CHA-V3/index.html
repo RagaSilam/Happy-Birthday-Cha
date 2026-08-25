@@ -1233,7 +1233,7 @@ body{
 
 /* MOBILE SAFE AREA UNTUK TOMBOL LARI */
 @media(max-width:600px){
-  .q-box{min-height:500px;}
+  .q-box{min-height:560px;}
 }
 </style>
 </head>
@@ -1780,8 +1780,8 @@ var questionStage = 1; /* track pertanyaan ke berapa */
 var resetNoButtonPosition = function(){};
 
 function getCorners(btn){
-  var bw  = btn.offsetWidth;
-  var bh  = btn.offsetHeight;
+  var bw = btn.offsetWidth;
+  var bh = btn.offsetHeight;
   var boxRect = qBox.getBoundingClientRect();
   var bxw = qBox.clientWidth;
   var bxh = qBox.clientHeight;
@@ -1791,7 +1791,7 @@ function getCorners(btn){
   var yT = PAD;
   var yB = Math.max(yT, bxh - bh - PAD);
 
-  /* Desktop tetap memakai pola posisi lama yang sudah bagus */
+  /* Desktop tetap memakai pola lama yang sudah cocok */
   if(window.innerWidth > 600){
     var yEmoji = yT;
     if(qEmoji){
@@ -1800,74 +1800,68 @@ function getCorners(btn){
       yEmoji = Math.min(Math.max(yT, yEmoji), yB);
     }
     return [
-      {name:'TL',  x:xL, y:yT},
-      {name:'TR',  x:xR, y:yT},
-      {name:'EML', x:xL + 18, y:yEmoji + 22},
-      {name:'EMR', x:xR - 18, y:yEmoji + 22},
-      {name:'BL',  x:xL, y:yB},
-      {name:'BR',  x:xR, y:yB}
+      {name:'TL',x:xL,y:yT},{name:'TR',x:xR,y:yT},
+      {name:'EML',x:xL+18,y:yEmoji+22},{name:'EMR',x:xR-18,y:yEmoji+22},
+      {name:'BL',x:xL,y:yB},{name:'BR',x:xR,y:yB}
     ];
   }
 
-  /* MOBILE: jangan memilih titik yang menimpa emoji, teks, atau tombol Iya */
+  /* MOBILE: hitung zona terlarang dari posisi AKTUAL semua isi q-box. */
+  var blocked = [];
   var blockedEls = [qEmoji, qTitle, qSub, qYes];
-  var safeRects = [];
+  var safety = 24; /* jarak kosong ekstra agar box tombol tidak terlihat menimpa */
 
   blockedEls.forEach(function(el){
     if(!el) return;
     var r = el.getBoundingClientRect();
-    if(r.width <= 0 || r.height <= 0) return;
-    var margin = 10;
-    safeRects.push({
-      left:   r.left   - boxRect.left - margin,
-      top:    r.top    - boxRect.top  - margin,
-      right:  r.right  - boxRect.left + margin,
-      bottom: r.bottom - boxRect.top  + margin
+    if(r.width < 1 || r.height < 1) return;
+    blocked.push({
+      left: Math.max(0, r.left - boxRect.left - safety),
+      top: Math.max(0, r.top - boxRect.top - safety),
+      right: Math.min(bxw, r.right - boxRect.left + safety),
+      bottom: Math.min(bxh, r.bottom - boxRect.top + safety)
     });
   });
 
-  function overlapsBlocked(x,y){
-    var right=x+bw, bottom=y+bh;
-    return safeRects.some(function(r){
+  function collides(x,y){
+    var right = x + bw, bottom = y + bh;
+    return blocked.some(function(r){
       return x < r.right && right > r.left && y < r.bottom && bottom > r.top;
     });
   }
 
-  /* Banyak kandidat menyebar di seluruh q-box. Yang bertabrakan otomatis dibuang. */
-  var raw = [
-    ['TL', xL, yT], ['TR', xR, yT],
-    ['ML', xL, Math.round((yT+yB)*0.5)], ['MR', xR, Math.round((yT+yB)*0.5)],
-    ['BL', xL, yB], ['BR', xR, yB],
-    ['T1', Math.round((xL+xR)*0.33), yT],
-    ['T2', Math.round((xL+xR)*0.66), yT],
-    ['B1', Math.round((xL+xR)*0.33), yB],
-    ['B2', Math.round((xL+xR)*0.66), yB]
-  ];
+  /* Scan seluruh area q-box. Tidak ada fallback yang boleh menimpa konten. */
+  var free = [];
+  var stepX = Math.max(10, Math.floor((xR - xL) / 14));
+  var stepY = Math.max(10, Math.floor((yB - yT) / 20));
+  var id = 0;
 
-  var free = raw.map(function(c){
-    return {name:c[0], x:Math.max(xL,Math.min(xR,c[1])), y:Math.max(yT,Math.min(yB,c[2]))};
-  }).filter(function(c){ return !overlapsBlocked(c.x,c.y); });
-
-  /* Kalau layar sangat kecil, cari titik aman dengan grid agar tetap tidak menimpa isi. */
-  if(free.length < 3){
-    var stepX = Math.max(18, Math.floor((xR-xL)/5));
-    var stepY = Math.max(18, Math.floor((yB-yT)/8));
-    var n=0;
-    for(var yy=yT; yy<=yB && n<24; yy+=stepY){
-      for(var xx=xL; xx<=xR && n<24; xx+=stepX){
-        var px=Math.min(xR,xx), py=Math.min(yB,yy);
-        if(!overlapsBlocked(px,py)){
-          free.push({name:'G'+n, x:px, y:py});
-          n++;
-        }
+  for(var yy = yT; yy <= yB; yy += stepY){
+    for(var xx = xL; xx <= xR; xx += stepX){
+      var px = Math.min(xR, xx);
+      var py = Math.min(yB, yy);
+      if(!collides(px, py)){
+        free.push({name:'M'+(id++), x:px, y:py});
       }
     }
   }
 
-  return free.length ? free : [
-    {name:'BL', x:xL, y:yB},
-    {name:'BR', x:xR, y:yB}
-  ];
+  /* Tambahkan titik tepi terakhir jika loop tidak tepat mengenai batas. */
+  [
+    [xL,yT],[xR,yT],[xL,yB],[xR,yB],
+    [Math.round((xL+xR)/2),yT],[Math.round((xL+xR)/2),yB]
+  ].forEach(function(pnt){
+    if(!collides(pnt[0],pnt[1])) free.push({name:'E'+(id++),x:pnt[0],y:pnt[1]});
+  });
+
+  /* Kalau benar-benar tidak ada ruang, perbesar q-box lalu hitung ulang pada klik berikutnya.
+     Tetap lebih baik daripada sengaja menimpa teks/tombol. */
+  if(!free.length){
+    qBox.style.minHeight = Math.max(qBox.clientHeight + 120, 680) + 'px';
+    return getCorners(btn);
+  }
+
+  return free;
 }
 function makeButtonRun(btn){
   var lastCorner = null;
